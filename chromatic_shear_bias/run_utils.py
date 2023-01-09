@@ -121,7 +121,7 @@ def draw_ormask(config, logger=None):
     return np.full(image_shape, int(0))
 
 
-def observation_builder(config, galsim_config, rng, logger=logger):
+def observation_builder(config, galsim_config, rng, logger=None):
     """
     Build an ngmix MultiBandObsList from a GalSim config dictionary.
     """

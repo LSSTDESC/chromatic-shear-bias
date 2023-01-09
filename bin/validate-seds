@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+"""
+Validate accuracy of parsing cosmodc2 SEDs
+"""
+
+import argparse
+import copy
+import logging
+import os
+import shutil
+from tempfile import mkdtemp
+
+import yaml
+import numpy as np
+
+import fitsio
+import galsim
+
+from chromatic_shear_bias import run_utils
+from chromatic_shear_bias.dc2_sed_utils import DC2_SEDCatalog
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--sed_catalog",
+        type=str,
+        required=True,
+        help="cosmodc2 SED catalog to validate [fits]",
+    )
+    return parser.parse_args()
+
+
+def get_logger():
+    """
+    Format logger.
+    """
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    return logger
+
+
+def main():
+    """
+    Build and validate SEDs from cosmodc2
+    """
+    args = get_args()
+    logger = get_logger()
+    rng = np.random.default_rng()
+
+    logger.info(f"Reading {args.sed_catalog} as a DC2_SEDCatalog")
+    dc2_sed_catalog = DC2_SEDCatalog(args.sed_catalog)
+
+    bands = ["u", "g", "r", "i", "z", "Y"]
+
+    bps = [galsim.Bandpass(f"LSST_{band.lower()}.dat", wave_type="nm") for band in bands]
+    bps_zp = [bp.withZeropoint("AB") for bp in bps]
+
+    # 10 random SEDs
+    _idx = rng.integers(0, dc2_sed_catalog.nobjects, size=10)
+    for _i in _idx:
+        ref_mags = np.asarray(
+            *dc2_sed_catalog.getRow(_i)[[f"mag_{band}_lsst" for band in bands]].tolist()
+        )
+        sed = dc2_sed_catalog.getSED(_i)
+        mags = np.asarray([sed.calculateMagnitude(bp) for bp in bps_zp])
+        assert np.allclose(ref_mags, mags), f"expected {ref_mags}; got {mags}"
+
+
+if __name__ == "__main__":
+    main()
